@@ -58,7 +58,7 @@ export default function Explorer({ rows, selectedId, onSelect, onReplay }) {
     <div className="explorer">
       <div className="explorer-chart">
         <div className="explorer-controls">
-          <label htmlFor="ykey">Compare value created with</label>
+          <label htmlFor="ykey">Vertical axis</label>
           <select id="ykey" value={yKey} onChange={(e) => setYKey(e.target.value)}>
             {Object.entries(Y_OPTIONS).map(([k, [n]]) => <option key={k} value={k}>{n}</option>)}
           </select>
@@ -119,10 +119,10 @@ export default function Explorer({ rows, selectedId, onSelect, onReplay }) {
           <div><dt>Customers kept after 2 years</dt><dd>{fmt.pct(sel.builder_retention_end)} / {fmt.pct(sel.project_retention_end)}</dd></div>
         </dl>
         <div>
-          <p className="how">Range of value created across all futures (IDR billion). The box holds the middle half of futures; the line spans 90% of them.</p>
+          <p className="spread-title">Value created across futures, IDR B</p>
           {dw > 0 && <Spread r={sel} top={top} w={dw} />}
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => onReplay(sel.id)}>Watch this option play out</button>
+        <button type="button" className="btn btn-primary" onClick={() => onReplay(sel.id)}>Watch day by day</button>
       </aside>
     </div>
   );

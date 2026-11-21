@@ -23,13 +23,13 @@ export default function StressTests({ sens, busy }) {
   return (
     <>
       <p className="verdict">
-        <b>{FAMILY_NAME[leader]}</b> earns the most in <b>{wins[leader]} of 9</b> situations.
+        <b>{FAMILY_NAME[leader]}</b> wins <b>{wins[leader]} of 9</b> tests. Best value created per option, IDR B.
       </p>
       <div className="table-wrap">
         <table className="stress">
           <thead>
             <tr>
-              <th>If this happens…</th>
+              <th>If…</th>
               {FAMILIES.map((f) => <th key={f}><span className="opt-name"><i className={`swatch ${f}`} />{FAMILY_NAME[f]}</span></th>)}
             </tr>
           </thead>
@@ -55,7 +55,6 @@ export default function StressTests({ sens, busy }) {
           </tbody>
         </table>
       </div>
-      <p className="muted small">Value created over two years, IDR billion, for the best version of each option. Each test uses 150 simulated futures.</p>
     </>
   );
 }

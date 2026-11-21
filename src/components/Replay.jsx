@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { FAMILIES, FAMILY_NAME, recommended, familyBests, shortDescribe, describe, overallRank, scale, ticks, linePath, useWidth, fmt } from "../lib.js";
+import { FAMILIES, FAMILY_NAME, recommended, familyBests, shortDescribe, overallRank, scale, ticks, linePath, useWidth, fmt } from "../lib.js";
 
 const L = 52, R = 14;
 
@@ -123,14 +123,13 @@ const LoyaltyChart = memo(function LoyaltyChart({ d, w }) {
   );
 });
 
-function Track({ title, how, legend, cursorX, children }) {
+function Track({ title, legend, cursorX, children }) {
   return (
     <div className="track">
       <div className="track-head">
         <h3>{title}</h3>
         {legend && <div className="legend">{legend}</div>}
       </div>
-      <p className="how">{how}</p>
       <div className="plot">
         {children}
         {cursorX != null && <div className="cursor" style={{ left: cursorX }} aria-hidden="true" />}
@@ -235,31 +234,32 @@ export default function Replay({ rows, version, cfgId, setCfgId, nSims, getRepla
         </div>
       </div>
 
-      <p className="replay-summary">
-        <i className={`swatch ${cfg.family}`} /> {describe(cfg)}.
-        {data && <> In this future the old machine {failText}. This option creates <b>IDR {fmt.bn(data.npv)} billion</b>, better than {fmt.pct(data.betterThan)} of all futures.</>}
-      </p>
+      {data && (
+        <p className="replay-summary">
+          This future: old machine {failText} · value created <b>IDR {fmt.bn(data.npv)} B</b> · better than {fmt.pct(data.betterThan)} of futures
+        </p>
+      )}
 
       <div className="replay-body">
         <div className="stack" ref={stackRef} onPointerMove={onMove} onPointerDown={onMove}>
           {ready && (
             <>
-              <Track cursorX={cx} title="Panels in the store (m²)" how="Machine runs fill the store; builder orders empty it. Grey shading means no machine is working."
-                legend={<><span><i className="swatch c-line" />stock</span><span>dashed: start a run below {fmt.int(cfg.reorder_s)}, stop at {fmt.int(cfg.order_up_to_S)}</span></>}>
+              <Track cursorX={cx} title="Panels in the store (m²)"
+                legend={<span>dashed: run below {fmt.int(cfg.reorder_s)}, stop at {fmt.int(cfg.order_up_to_S)} · grey: no machine</span>}>
                 <StockChart d={data} w={w} cfg={cfg} />
               </Track>
-              <Track cursorX={cx} title="What the day crew did" how="Each thin bar is one working day."
+              <Track cursorX={cx} title="What the day crew did"
                 legend={<><span><i className="swatch c-belt" />machine</span><span><i className="swatch c-hand" />hand panels</span><span><i className="swatch c-idle" />nothing to do</span><span><i className="swatch c-down" />no machine</span></>}>
                 <CrewStrip d={data} w={w} />
               </Track>
-              <Track cursorX={cx} title="Delivery time quoted to project clients (days)" how="Below the first dashed line, we keep the 12-day promise. Above the second, the client leaves or goes to a partner.">
+              <Track cursorX={cx} title="Project delivery time quoted (days)">
                 <LeadChart d={data} w={w} cfg={cfg} />
               </Track>
-              <Track cursorX={cx} title="Profit each month (IDR million)" how="The dark bar is this future. The grey range shows where 90% of all futures land."
+              <Track cursorX={cx} title="Profit each month (IDR million)"
                 legend={<><span><i className="swatch c-accent" />this future</span><span><i className="swatch c-band" />typical range</span></>}>
                 <ProfitChart d={data} w={w} />
               </Track>
-              <Track cursorX={cx} title="Customers still buying from us" how="Late or missing orders drive customers away. 100% means no one has left."
+              <Track cursorX={cx} title="Customers kept"
                 legend={<><span><i className="swatch c-belt" />builders</span><span><i className="swatch c-hand" />project clients</span></>}>
                 <LoyaltyChart d={data} w={w} />
               </Track>
