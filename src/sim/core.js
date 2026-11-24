@@ -12,6 +12,8 @@ const DEFAULTS = {
   demand_total_month: 11000, share_builder: 0.60, builder_level_cv: 0.15, builder_daily_cv: 0.70,
   project_mean_size: 100, project_size_cv: 1.0, project_level_cv: 0.25,
   project_promise: 12, project_patience: 24,
+  overflow_quote_max: 12,   // routing rule v2: overflow set-ups send a project to a partner above this quote (days)
+  partner_cap_month: 1e12,  // partner m² a month; unlimited except in the capacity stress test
   open_month: 3, ramp_months: 2, ramp_productivity: 0.5, crew_size: 8, wage_month: 5.0e6,
   second_shift_premium: 1.3, hiring_cost_per_op: 15.0e6,
   fail_min: 1.0, fail_max: 12.0,
@@ -25,11 +27,13 @@ const SCENARIOS = [
   ["No cross-sell churn (γ = 0)", { churn_cross: 0.0 }],
   ["Strong cross-sell churn (γ = 0.4)", { churn_cross: 0.40 }],
   ["Builder price war (−5% price)", { machine_price_shock: 0.05 }],
-  ["Builders −20% demand", { demand_total_month: 11000 * (1 - 0.6 * 0.2) }],
+  ["Lower demand (total −12%)", { demand_total_month: 11000 * (1 - 0.6 * 0.2) }],
   ["Slow crew ramp-up (30% for 4 mo)", { ramp_months: 4, ramp_productivity: 0.3 }],
   ["Old line dies early (months 1–6)", { fail_max: 6.0 }],
   ["Unreliable partner (40–50% on time)", { partner_project_ontime: 0.4, resale_ontime: 0.5 }],
   ["Expensive labour (2× wage)", { wage_month: 10.0e6 }],
+  ["New line late (ready month 8)", { open_month: 7 }],
+  ["Partner capacity capped (600 m²/mo)", { partner_cap_month: 600 }],
 ];
 
 const OBJECTIVES = ["E_NPV_bn", "CVaR5_NPV_bn", "weakest_side_ontime", "coverage"];
@@ -159,8 +163,9 @@ function simulate(cfg, p, sc, opts) {
 
   const npv = new Float64Array(n), gpT = new Float64Array(n), bsl = new Float64Array(n), psl = new Float64Array(n),
     slmin = new Float64Array(n), cov = new Float64Array(n), loyB = new Float64Array(n), loyP = new Float64Array(n),
-    beltD = new Float64Array(n), handD = new Float64Array(n);
+    beltD = new Float64Array(n), handD = new Float64Array(n), partnerShare = new Float64Array(n);
   const gpMonthAll = opts.monthly ? new Float64Array(M * n) : null;
+  const potMonth = opts.monthly ? new Float64Array(M * n) : null, pdemMonth = opts.monthly ? new Float64Array(M * n) : null;
   const trace = opts.tracePath != null ? { stock: [], belt: [], hand: [], backlog: [], dem_b: [], sold: [], unmet: [], proj: [], partner: [], gp: [], loy_b: [], loy_p: [], avail: [], lead: [] } : null;
 
   for (let i = 0; i < n; i++) {
@@ -168,11 +173,11 @@ function simulate(cfg, p, sc, opts) {
     let stock = Math.min(p.start_stock, S), inBlock = false, blockLen = 0, prevBelt = false;
     let W = 0, V = 0, capRate = 0.5 * cfg.core_hand, lb = 1, lp = 1;
     let tb_dem = 0, tb_ot = 0, tb_srv = 0, tp_dem = 0, tp_ot = 0, tp_srv = 0, bd = 0, hd = 0;
-    let mb_dem = 0, mb_ot = 0, mp_dem = 0, mp_ot = 0, gpm = 0, npvAcc = 0, gpAcc = 0;
+    let mb_dem = 0, mb_ot = 0, mp_dem = 0, mp_ot = 0, gpm = 0, npvAcc = 0, gpAcc = 0, monPartner = 0, partnerTot = 0;
     const fail = sc.fail[i];
     for (let t = 0; t < T; t++) {
       const m = (t / D) | 0, mo = t / D;
-      if (t % D === 0) { mb_dem = mb_ot = mp_dem = mp_ot = 0; gpm = 0; }
+      if (t % D === 0) { mb_dem = mb_ot = mp_dem = mp_ot = 0; gpm = 0; monPartner = 0; }
       const avail = fail > mo || (isLine && m >= p.open_month);
       if (avail && !inBlock && stock < s) inBlock = true;
       if (!avail) inBlock = false;
@@ -200,17 +205,23 @@ function simulate(cfg, p, sc, opts) {
       const k = sc.k[idx] * lp, sz = sc.size[idx] * lp;
       const A = sz / p.hand_rate + p.hand_setup_days * k;
       let p_ot = 0, p_srv = 0, partnerVol = 0, lead = 0;
-      if (partnerAll) partnerVol = sz;
+      const partnerFull = monPartner >= p.partner_cap_month;
+      if (partnerAll) partnerVol = partnerFull ? 0 : sz;   // beyond partner capacity: lost
       else if (inhouse) {
         lead = (W + 0.5 * A) / Math.max(capRate, 0.05);
-        const accept = lead <= p.project_patience;
+        // v2 rule: overflow set-ups keep the 12-day promise and pass longer quotes to the partner,
+        // unless the partner is full this month (then keep it if the client will still wait)
+        const accept = overflow
+          ? lead <= p.overflow_quote_max || (partnerFull && lead <= p.project_patience)
+          : lead <= p.project_patience;
         const accVol = accept ? sz : 0;
         if (accept) W += A;
         V += accVol * gp_h;
         if (lead <= p.project_promise) p_ot += accVol;
         p_srv += accVol;
-        if (overflow && !accept) partnerVol = sz;
+        if (overflow && !accept && !partnerFull) partnerVol = sz;
       }
+      monPartner += partnerVol; partnerTot += partnerVol;
       gpDay += partnerVol * ph * p.partner_project_margin;
       p_ot += p.partner_project_ontime * partnerVol; p_srv += partnerVol;
 
@@ -238,7 +249,7 @@ function simulate(cfg, p, sc, opts) {
         lb = Math.min(1, Math.max(p.loyalty_floor, lb * (1 - p.churn_stockout * (1 - bf) - p.cross_share * p.churn_cross * (1 - pok)) + p.loyalty_recovery * (1 - lb)));
         lp = Math.min(1, Math.max(p.loyalty_floor, lp * (1 - p.churn_project * (1 - pok)) + p.loyalty_recovery * (1 - lp)));
         npvAcc += (gpm - fixed[m]) * df[m]; gpAcc += gpm;
-        if (gpMonthAll) gpMonthAll[m * n + i] = gpm;
+        if (gpMonthAll) { gpMonthAll[m * n + i] = gpm; potMonth[m * n + i] = mp_ot; pdemMonth[m * n + i] = mp_dem; }
       }
     }
     npv[i] = npvAcc - capex + residual * df[M - 1];
@@ -247,10 +258,10 @@ function simulate(cfg, p, sc, opts) {
     psl[i] = tp_dem > 0 ? tp_ot / Math.max(tp_dem, 1e-9) : 1;
     slmin[i] = Math.min(bsl[i], psl[i]);
     cov[i] = (tb_srv + tp_srv) / (tb_dem + tp_dem);
-    loyB[i] = lb; loyP[i] = lp; beltD[i] = bd; handD[i] = hd;
+    loyB[i] = lb; loyP[i] = lp; beltD[i] = bd; handD[i] = hd; partnerShare[i] = tp_dem > 0 ? partnerTot / tp_dem : 0;
   }
-  return { npv, gp: gpT, b_sl: bsl, p_sl: psl, sl_min: slmin, cov, loy_b: loyB, loy_p: loyP, belt_days: beltD, hand_days: handD,
-    capex, fixed: Array.from(fixed), gpMonth: gpMonthAll, trace };
+  return { npv, gp: gpT, b_sl: bsl, p_sl: psl, sl_min: slmin, cov, loy_b: loyB, loy_p: loyP, belt_days: beltD, hand_days: handD, partner_share: partnerShare,
+    capex, fixed: Array.from(fixed), gpMonth: gpMonthAll, potMonth, pdemMonth, trace };
 }
 
 // ---------------------------------------------------------------- summaries
@@ -274,7 +285,7 @@ function summarise(cfg, r) {
     P95_NPV_bn: percentile(sorted, 95), P_NPV_below_0: neg / n, E_GP_bn: mean(r.gp) / 1e9,
     builder_ontime: mean(r.b_sl), project_ontime: mean(r.p_sl), weakest_side_ontime: mean(r.sl_min), coverage: mean(r.cov),
     builder_retention_end: mean(r.loy_b), project_retention_end: mean(r.loy_p),
-    core_belt_days: mean(r.belt_days), core_hand_days: mean(r.hand_days),
+    core_belt_days: mean(r.belt_days), core_hand_days: mean(r.hand_days), partner_share: mean(r.partner_share),
     hist: histogram(npv),
   };
 }

@@ -29,6 +29,9 @@ export const PARAM_GROUPS = [
     ["discount_annual", "Discount rate per year", 0.04, 0.25, 0.005, fmt.pct1, "ours"],
   ]],
   ["Partners", [
+    ["overflow_quote_max", "Send a project to a partner if our quote is over, days", 6, 24, 1, fmt.int, "ours"],
+    ["partner_cap_month", "Partner capacity, m² a month", 200, 3200, 100, (v) => (v >= 1e11 ? "No limit" : fmt.int(v)), "ours",
+      { toSlider: (v) => Math.min(v, 3200), toParam: (v) => (v >= 3200 ? 1e12 : v) }],
     ["partner_project_ontime", "Project partner delivers on time", 0.2, 1, 0.05, fmt.pct, "ours"],
     ["partner_project_margin", "Margin we keep on partnered projects", 0, 0.2, 0.01, fmt.pct, "ours"],
     ["resale_ontime", "Resold builder panels on time", 0.2, 1, 0.05, fmt.pct, "ours"],

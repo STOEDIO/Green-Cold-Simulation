@@ -3,21 +3,24 @@ import { PARAM_GROUPS } from "../params.js";
 
 export const SITUATIONS = [
   ["Builders cut prices 5%", { machine_price_shock: 0.05 }],
-  ["Builder orders fall 20%", { demand_total_month: 11000 * (1 - 0.6 * 0.2) }],
+  ["Demand falls 12%", { demand_total_month: 11000 * (1 - 0.6 * 0.2) }],
   ["Old machine breaks early", { fail_max: 6 }],
   ["Wages double", { wage_month: 10e6 }],
   ["Partners unreliable", { partner_project_ontime: 0.4, resale_ontime: 0.5 }],
   ["New crew learns slowly", { ramp_months: 4, ramp_productivity: 0.3 }],
   ["Late projects cost builders", { churn_cross: 0.4 }],
+  ["New machine late (month 8)", { open_month: 7 }],
+  ["Partners capped at 600 m²", { partner_cap_month: 600 }],
   ["More project work (55%)", { share_builder: 0.45 }],
 ];
 const KEY = ["machine_price_shock", "demand_total_month", "share_builder", "fail_max", "wage_month", "partner_project_ontime"];
 const ALL = Object.fromEntries(PARAM_GROUPS.flatMap(([, list]) => list.map((p) => [p[0], p])));
 const PRIORITIES = [["Profit-first", "Profit"], ["Risk-averse", "Safety"], ["Neither-side-lost", "Both customers"], ["Coverage-first", "Reach"]];
-const MEASURE = { E_NPV_bn: "Value", CVaR5_NPV_bn: "Bad-year value", weakest_side_ontime: "On time", coverage: "Orders served" };
+const MEASURE = { E_NPV_bn: "Value", CVaR5_NPV_bn: "Bad-luck value", weakest_side_ontime: "On time", coverage: "Orders served" };
 
 function Slider({ def, value, onChange }) {
-  const [key, label, min, max, step, format, source] = def;
+  const [key, label, min, max, step, format, source, map] = def;
+  const toSlider = map ? map.toSlider : (v) => v, toParam = map ? map.toParam : (v) => v;
   const changed = Math.abs(value - DEFAULTS[key]) > 1e-9;
   return (
     <div className={`slider ${changed ? "is-changed" : ""}`}>
@@ -28,7 +31,7 @@ function Slider({ def, value, onChange }) {
         <output htmlFor={`p-${key}`}>{format(value)}</output>
       </div>
       <div className="slider-row">
-        <input id={`p-${key}`} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(key, +e.target.value)} />
+        <input id={`p-${key}`} type="range" min={min} max={max} step={step} value={toSlider(value)} onChange={(e) => onChange(key, toParam(+e.target.value))} />
         <button type="button" className="undo" aria-label={`Reset ${label}`} title="Reset" disabled={!changed} onClick={() => onChange(key, DEFAULTS[key])}>↺</button>
       </div>
     </div>

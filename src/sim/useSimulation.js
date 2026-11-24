@@ -64,6 +64,21 @@ function replayPath(ctx, cfgId, path) {
   };
 }
 
+// The deck's quarterly-review numbers for one combination.
+function kpisFor(ctx, cfgId) {
+  const { p, sc } = ctx;
+  const r = GC.simulate(configs[cfgId], p, sc, { monthly: true });
+  const n = sc.n, M = p.months;
+  let gp = 0, worst = 1;
+  for (let m = 0; m < M; m++) {
+    let g = 0, ot = 0, dem = 0;
+    for (let i = 0; i < n; i++) { g += r.gpMonth[m * n + i]; ot += r.potMonth[m * n + i]; dem += r.pdemMonth[m * n + i]; }
+    if (m >= 6) gp += g / n / 1e6;
+    if (dem > 0) worst = Math.min(worst, ot / dem);
+  }
+  return { gpFromMonth7: gp / (M - 6), worstMonthProjectOntime: worst };
+}
+
 export function useSimulation(params, nSims, seed) {
   const runId = useRef(0);
   const ctx = useRef(null);
@@ -85,5 +100,6 @@ export function useSimulation(params, nSims, seed) {
   }, [params, nSims, seed]);
 
   const getReplay = useCallback((cfgId, path) => (ctx.current ? replayPath(ctx.current, cfgId, path) : null), []);
-  return { ...state, getReplay };
+  const getKpis = useCallback((cfgId) => (ctx.current ? kpisFor(ctx.current, cfgId) : null), []);
+  return { ...state, getReplay, getKpis };
 }

@@ -21,6 +21,8 @@
   --core: #efd57e;
   --core-dot: #d8b54c;
   --good: #1d7a43;
+  --warn: #a25a00;
+  --bad: #b3261e;
   --f-head: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
   --bar-h: 56px;
@@ -31,7 +33,7 @@
     --page: #121618; --panel: #181d20; --raised: #1b2124; --ink: #e6eaec; --ink-2: #b4bec3; --muted: #87949a;
     --rule: #283136; --rule-strong: #3f4b51; --accent: #6fb3c6; --accent-ink: #0b1d23; --accent-soft: #1d2f35;
     --machine: #3987e5; --hand: #d95926; --split: #199e70; --idle: #3a454b; --down: #8a979d;
-    --steel: #66757c; --core: #8a7633; --core-dot: #ad9443; --good: #5cc283;
+    --steel: #66757c; --core: #8a7633; --core-dot: #ad9443; --good: #5cc283; --warn: #e3a24a; --bad: #f07a6e;
     color-scheme: dark;
   }
 }
@@ -260,3 +262,20 @@ details.more ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-s
 .kv dt { color: var(--ink-2); }
 .kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- deck alignment: service marks and quarterly KPIs */
+.mark { display: inline-block; width: 1.1em; margin-right: 4px; font-weight: 700; text-align: center; }
+.mark-ok { color: var(--good); }
+.mark-near { color: var(--warn); }
+.mark-off { color: var(--bad); }
+.table-foot { font-size: .82rem; color: var(--muted); margin-top: 8px; }
+.kpis { margin-top: 26px; display: grid; gap: 12px; }
+.kpis h3 { font: 600 1rem var(--f-body); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+.kpi { background: var(--raised); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.kpi-name { font-size: .86rem; color: var(--ink-2); }
+.kpi-value { font: 700 1.9rem/1.05 var(--f-head); }
+.kpi-target { font-size: .84rem; font-weight: 600; }
+.kpi-target.ok { color: var(--good); }
+.kpi-target.off { color: var(--bad); }
+.kpi-note { font-size: .8rem; color: var(--muted); }

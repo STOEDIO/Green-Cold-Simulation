@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FAMILIES, FAMILY_NAME, FAMILY_COLOR, recommended, overallRank, describe, scale, ticks, useWidth, fmt } from "../lib.js";
 
 const Y_OPTIONS = {
-  CVaR5_NPV_bn: ["Value in a bad year (IDR billion)", fmt.bn1],
+  CVaR5_NPV_bn: ["Bad-luck value, worst 1 in 20 futures (IDR billion)", fmt.bn1],
   weakest_side_ontime: ["On-time delivery, weaker customer group", fmt.pct],
   project_ontime: ["Project orders on time", fmt.pct],
   builder_ontime: ["Builder orders on time", fmt.pct],
@@ -113,7 +113,7 @@ export default function Explorer({ rows, selectedId, onSelect, onReplay }) {
         <p className="detail-desc">{describe(sel)}.</p>
         <dl className="kv">
           <div><dt>Value created, average</dt><dd>IDR {fmt.bn1(sel.E_NPV_bn)} B</dd></div>
-          <div><dt>Value in a bad year</dt><dd>IDR {fmt.bn1(sel.CVaR5_NPV_bn)} B</dd></div>
+          <div><dt>Bad-luck value (worst 1 in 20)</dt><dd>IDR {fmt.bn1(sel.CVaR5_NPV_bn)} B</dd></div>
           <div><dt>Builder / project on time</dt><dd>{fmt.pct(sel.builder_ontime)} / {fmt.pct(sel.project_ontime)}</dd></div>
           <div><dt>Orders served</dt><dd>{fmt.pct(sel.coverage)}</dd></div>
           <div><dt>Customers kept after 2 years</dt><dd>{fmt.pct(sel.builder_retention_end)} / {fmt.pct(sel.project_retention_end)}</dd></div>

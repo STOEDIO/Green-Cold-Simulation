@@ -7,7 +7,7 @@ import Explorer from "./Explorer.jsx";
 import Ranking from "./Ranking.jsx";
 import StressTests from "./StressTests.jsx";
 
-const VIEWS = [["overview", "Overview"], ["day", "Day by day"], ["all", "All options"], ["ranking", "Ranking"], ["stress", "Stress tests"]];
+const VIEWS = [["overview", "Overview"], ["day", "Day by day"], ["all", "All combinations"], ["ranking", "Ranking"], ["stress", "Stress tests"]];
 
 function Headline({ rows, busy, changes }) {
   const best = familyBests(rows);
@@ -58,7 +58,7 @@ export default function TryPage(props) {
               <button type="button" className="link-btn views-help" onClick={onHelp}>How does this work?</button>
             </div>
             <div className="view">
-              {view === "overview" && <DecisionTable rows={rows} />}
+              {view === "overview" && <DecisionTable rows={rows} getKpis={sim.getKpis} version={sim.version} />}
               {view === "day" && (
                 <Replay rows={rows} version={sim.version} cfgId={replayId ?? top.id} setCfgId={setReplayId} nSims={props.nSims} getReplay={sim.getReplay} />
               )}

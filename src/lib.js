@@ -14,8 +14,15 @@ export const fmt = {
 
 export const bestBy = (rows, f) => rows.reduce((a, b) => (f(b) > f(a) ? b : a));
 export const recommended = (rows) => bestBy(rows, (r) => -r.avg_rank_profiles);
-export const familyBests = (rows) =>
-  Object.fromEntries(FAMILIES.map((f) => [f, bestBy(rows.filter((r) => r.family === f), (r) => r.E_NPV_bn)]));
+// Best version of each option by value created. For the recommended option's family we show the
+// recommended set-up itself, so a near-tie in value can't make the pages quote different versions.
+export const familyBests = (rows) => {
+  const rec = recommended(rows);
+  return Object.fromEntries(FAMILIES.map((f) => [
+    f,
+    f === rec.family ? rec : bestBy(rows.filter((r) => r.family === f), (r) => r.E_NPV_bn),
+  ]));
+};
 export const overallRank = (rows, r) => 1 + rows.filter((x) => x.avg_rank_profiles < r.avg_rank_profiles).length;
 
 const ROUTE = {

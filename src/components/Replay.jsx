@@ -214,7 +214,7 @@ export default function Replay({ rows, version, cfgId, setCfgId, nSims, getRepla
               <button key={n} type="button" aria-pressed={cfgId === id} onClick={() => setCfgId(id)}>{n}</button>
             ))}
           </div>
-          <select aria-label="Choose any of the 152 options" value={cfgId} onChange={(e) => setCfgId(+e.target.value)}>
+          <select aria-label="Choose any of the 152 combinations" value={cfgId} onChange={(e) => setCfgId(+e.target.value)}>
             {FAMILIES.map((f) => (
               <optgroup key={f} label={FAMILY_NAME[f]}>
                 {sorted.filter((r) => r.family === f).map((r) => (

@@ -3,6 +3,13 @@
 PT Green Cold - Machine vs Hand sandwich panel: simulation + configuration optimiser
 ====================================================================================
 
+Team STOEDIO. This is the team's original model. The only changes for the deck are:
+  * simulate() also returns monthly gross profit, monthly fixed cost, monthly project
+    on-time volume and partner volume (bookkeeping only: no result changes), so
+    deck_figures.py can print the payback, yearly profit and partner share shown in the deck.
+  * the stress test that cuts total demand by 12% is labelled "Lower demand (total -12%)"
+    (it was labelled "Builders -20% demand"; the numbers are unchanged).
+
 Structure
 ---------
 1. Params          every assumption in one place (EDIT THESE; anything not in the
@@ -18,7 +25,7 @@ Structure
 
 Usage
 -----
-    python simulation.py                 # full run
+    python simulation.py                 # full run (400 paths, 150 per stress test, seed 7)
     python simulation.py --quick         # fast sanity run
     python simulation.py --n-sims 1000 --seed 3
     python simulation.py --out results   # choose the output folder
@@ -78,9 +85,12 @@ class Params:
     # --- service promises ------------------------------------------------------
     project_promise: float = 12.0         # brief  days (treated as working days)
     project_patience: float = 24.0        # ASSUMPTION  quoted lead above this and the client walks
+    overflow_quote_max: float = 12.0      # ROUTING RULE (v2)  overflow plans send a project to a partner when the
+                                          # in-house quote exceeds this many days (v1 used 24 = client patience)
+    partner_cap_month: float = 1e12       # stress test only: partner m2 a month; beyond it projects stay in-house
 
     # --- labour / roll-out of new capacity -----------------------------------------
-    open_month: int = 3                   # ASSUMPTION  hall / new line / 2nd shift ready from this month
+    open_month: int = 3                   # ASSUMPTION  hall / new line / 2nd shift ready from this month (0-based: month 4)
     ramp_months: int = 2                  # ASSUMPTION
     ramp_productivity: float = 0.5        # ASSUMPTION  new crew productivity during ramp-up
     crew_size: int = 8                    # brief
@@ -202,13 +212,18 @@ def simulate(cfg: Config, p: Params, sc: dict) -> dict:
     loy_p = np.ones(n)
 
     gp_month = np.zeros((p.months, n))
+    pot_month = np.zeros((p.months, n))   # bookkeeping for the deck: project m2 on time, per month
+    pdem_month = np.zeros((p.months, n))  # bookkeeping for the deck: project m2 demanded, per month
+    partner_tot = np.zeros(n)             # bookkeeping for the deck: project m2 sent to partners
     tot = {k: np.zeros(n) for k in ("b_dem", "b_ot", "b_srv", "p_dem", "p_ot", "p_srv", "belt_days", "hand_days")}
     mon = {k: np.zeros(n) for k in ("b_dem", "b_ot", "p_dem", "p_ot")}
 
+    mon_partner = np.zeros(n)
     for t in range(T):
         m = t // D
         mo = t / D
         if t % D == 0:
+            mon_partner = np.zeros(n)
             for k in mon:
                 mon[k][:] = 0.0
 
@@ -253,20 +268,28 @@ def simulate(cfg: Config, p: Params, sc: dict) -> dict:
         p_srv = np.zeros(n)
         partner_vol = np.zeros(n)
         if cfg.project_mode == "partner_all":
-            partner_vol = sz
+            partner_vol = np.where(mon_partner >= p.partner_cap_month, 0.0, sz)   # beyond partner capacity: lost
         elif inhouse:
             lead = (W + 0.5 * A) / np.maximum(cap_rate, 0.05)
-            accept = lead <= p.project_patience
+            if cfg.project_mode == "overflow":
+                # v2 rule: keep the 12-day promise; partner takes it unless the partner is full this month
+                partner_full = mon_partner >= p.partner_cap_month
+                accept = (lead <= p.overflow_quote_max) | (partner_full & (lead <= p.project_patience))
+            else:
+                accept = lead <= p.project_patience
             acc_vol = np.where(accept, sz, 0.0)
             W = W + np.where(accept, A, 0.0)
             V = V + acc_vol * gp_h
             p_ot += np.where(lead <= p.project_promise, acc_vol, 0.0)
             p_srv += acc_vol
             if cfg.project_mode == "overflow":
-                partner_vol = np.where(accept, 0.0, sz)
+                # not accepted in-house: the partner takes it, unless the partner is full (then the client walks)
+                partner_vol = np.where(accept | partner_full, 0.0, sz)
+        mon_partner = mon_partner + partner_vol
         gp_day += partner_vol * ph * p.partner_project_margin
         p_ot += p.partner_project_ontime * partner_vol
         p_srv += partner_vol
+        partner_tot += partner_vol
 
         # ---- hand production: core crew (if dispatched) + extra crews
         ramp = 0.0 if m < p.open_month else (p.ramp_productivity if m < p.open_month + p.ramp_months else 1.0)
@@ -281,6 +304,8 @@ def simulate(cfg: Config, p: Params, sc: dict) -> dict:
 
         # ---- bookkeeping
         gp_month[m] += gp_day
+        pot_month[m] += p_ot
+        pdem_month[m] += sz
         for key, val in (("b_dem", dem_b), ("b_ot", b_ot), ("b_srv", b_srv), ("p_dem", sz), ("p_ot", p_ot), ("p_srv", p_srv)):
             tot[key] += val
             if key in mon:
@@ -310,7 +335,10 @@ def simulate(cfg: Config, p: Params, sc: dict) -> dict:
     cov = (tot["b_srv"] + tot["p_srv"]) / (tot["b_dem"] + tot["p_dem"])
     return dict(npv=npv, gp=gp_month.sum(0), b_sl=b_sl, p_sl=p_sl, sl_min=np.minimum(b_sl, p_sl), cov=cov,
                 loy_b=loy_b, loy_p=loy_p, belt_days=tot["belt_days"], hand_days=tot["hand_days"],
-                capex=capex)
+                capex=capex,
+                # bookkeeping for the deck (deck_figures.py); not used by the ranking
+                gp_month=gp_month, fixed=fixed, pot_month=pot_month, pdem_month=pdem_month,
+                partner_m2=partner_tot, p_dem=tot["p_dem"])
 
 
 def summarise(cfg: Config, r: dict, p: Params) -> dict:
@@ -404,11 +432,13 @@ SCENARIOS = {
     "No cross-sell churn (gamma=0)": dict(churn_cross=0.0),
     "Strong cross-sell churn (gamma=0.4)": dict(churn_cross=0.40),
     "Builder price war (-5% price)": dict(machine_price_shock=0.05),
-    "Builders -20% demand": dict(demand_total_month=11_000 * (1 - 0.6 * 0.2)),   # builder volume down 20%
+    "Lower demand (total -12%)": dict(demand_total_month=11_000 * (1 - 0.6 * 0.2)),   # both segments fall 12%
     "Slow crew ramp-up (30% for 4 mo)": dict(ramp_months=4, ramp_productivity=0.3),
     "Old line dies early (m1-6)": dict(fail_max=6.0),
     "Unreliable partner (40-50% on time)": dict(partner_project_ontime=0.4, resale_ontime=0.5),
     "Expensive labour (2x wage)": dict(wage_month=10.0e6),
+    "New line late (ready month 8)": dict(open_month=7),
+    "Partner capacity capped (600 m2/mo)": dict(partner_cap_month=600.0),
 }
 
 
@@ -584,7 +614,10 @@ def main():
             pd.DataFrame([vars(p)]).T.rename(columns={0: "value"}).to_excel(xw, sheet_name="assumptions")
     except Exception as e:  # openpyxl missing etc.
         print("xlsx not written:", e)
-    make_plots(df, paths, sens, a.out)
+    try:
+        make_plots(df, paths, sens, a.out)
+    except ImportError as e:
+        print("plots not written:", e)
 
     pd.set_option("display.width", 250, "display.max_colwidth", 95, "display.max_rows", 500)
     show = ["label", "E_NPV_bn", "CVaR5_NPV_bn", "weakest_side_ontime", "coverage", "pareto_level", "avg_rank_profiles"]
